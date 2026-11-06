@@ -1,0 +1,4 @@
+/tw-bisect
+/dist/
+*.json
+!testdata/*.json
