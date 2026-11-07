@@ -104,6 +104,23 @@ CA certificates, nothing else.
 - One failure at a time. If two independent regressions landed in the same
   range, bisect finds one of them.
 
+## Related work
+
+- **debbisect** (Debian devscripts) is the closest relative: it bisects
+  snapshot.debian.org timestamps and can then try the differing packages one
+  at a time. tw-bisect does the package step as a search over subsets, follows
+  what zypper actually changed, and ends with the changelog entry.
+- **openQA** computes the package difference between a failed job and the last
+  good one (`diff_packages_to_last_good`). tw-bisect starts where that diff
+  ends: it executes your test against the candidates.
+- **tumbleweed-cli** (Jimmy Berry) switches a live system between archived
+  snapshots. It consumes the same archive and is the right tool for pinning;
+  it does not search.
+- The archive itself: `download.opensuse.org/history/` keeps the newest twenty
+  snapshots (`SNAPSHOT_COUNT_MAX=20` in the openSUSE infrastructure, see
+  progress.opensuse.org issue 56690), x86_64 and noarch only. Every snapshot
+  carries its full OSS repository, `rpm.list` and `rpm.unique.list`.
+
 ## Why not Snapper?
 
 Snapper rolls the whole machine back, which is the right first move. It does
