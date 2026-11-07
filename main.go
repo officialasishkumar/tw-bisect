@@ -29,6 +29,7 @@ Usage:
   tw-bisect snapshots                      list the snapshots still in the archive
   tw-bisect diff <good> <bad> [flags]      packages that changed between two snapshots
   tw-bisect run [flags] -- <command>       find the snapshot, then the package, that broke <command>
+  tw-bisect sweep [flags] -- <command>     run <command> on every archived snapshot and print the timeline
   tw-bisect shell <snapshot> [flags]       open a shell in a snapshot
   tw-bisect version
 
@@ -63,6 +64,8 @@ func run(args []string) error {
 		return cmdDiff(ctx, args[1:])
 	case "run":
 		return cmdRun(ctx, args[1:])
+	case "sweep":
+		return cmdSweep(ctx, args[1:])
 	case "shell":
 		return cmdShell(ctx, args[1:])
 	case "version":
@@ -240,6 +243,83 @@ func cmdShell(ctx context.Context, args []string) error {
 	}
 	_, _, err = d.Exec(ctx, tag, nil, "exec bash", true)
 	return err
+}
+
+func cmdSweep(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("sweep", flag.ContinueOnError)
+	rt := runtimeFlags(fs)
+	from := fs.String("from", "", "oldest snapshot to test (default: oldest in the archive)")
+	to := fs.String("to", "", "newest snapshot to test (default: newest in the archive)")
+	pkgs := fs.String("pkgs", "", "comma-separated packages to install in every snapshot before testing")
+	jsonOut := fs.String("json", "", "write the per-snapshot verdicts to this file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		return errors.New("usage: tw-bisect sweep [--from S] [--to S] [--pkgs a,b] -- <command>")
+	}
+	command := strings.Join(fs.Args(), " ")
+	if fs.NArg() > 1 {
+		command = shellJoin(fs.Args())
+	}
+	c := history.NewClient()
+	snaps, err := c.Snapshots(ctx)
+	if err != nil {
+		return err
+	}
+	lo, hi := 0, len(snaps)-1
+	if *from != "" {
+		if lo = index(snaps, *from); lo < 0 {
+			return fmt.Errorf("%s is not in the archive", *from)
+		}
+	}
+	if *to != "" {
+		if hi = index(snaps, *to); hi < 0 {
+			return fmt.Errorf("%s is not in the archive", *to)
+		}
+	}
+	d, err := rt.docker()
+	if err != nil {
+		return err
+	}
+	d.Log = os.Stderr
+	extra := splitList(*pkgs)
+	type verdict struct {
+		Snapshot string `json:"snapshot"`
+		Verdict  string `json:"verdict"`
+		Note     string `json:"note,omitempty"`
+	}
+	var out []verdict
+	prev := ""
+	for _, s := range snaps[lo : hi+1] {
+		tag, err := d.BuildSnapshot(ctx, s, c.RepoURL(s), extra)
+		if err != nil {
+			out = append(out, verdict{s, "skip", firstLine(err.Error())})
+			fmt.Printf("%s  skip   (build failed)\n", s)
+			continue
+		}
+		v, log, err := d.Test(ctx, tag, command)
+		if err != nil {
+			return err
+		}
+		mark := ""
+		if prev != "" && prev != v.String() && v != bisect.Skip {
+			mark = "  <- changed"
+		}
+		fmt.Printf("%s  %-5s%s\n", s, v, mark)
+		if v == bisect.Bad {
+			fmt.Print(indent(lastLines(log, 2), "            "), "\n")
+		}
+		out = append(out, verdict{s, v.String(), ""})
+		if v != bisect.Skip {
+			prev = v.String()
+		}
+	}
+	if *jsonOut != "" {
+		b, _ := json.MarshalIndent(map[string]any{"command": command, "extra_packages": extra, "results": out}, "", "  ")
+		return os.WriteFile(*jsonOut, append(b, '\n'), 0o644)
+	}
+	return nil
 }
 
 // Report is the machine-readable result of a run.

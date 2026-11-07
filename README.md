@@ -84,6 +84,8 @@ tw-bisect diff 20261104 20261105 --changelog --only rsync,kmod
 tw-bisect run --good G --bad B [--pkgs a,b] -- <command>
 tw-bisect run ... --snapshots-only        stop after the snapshot search
 tw-bisect run ... --json report.json      machine-readable result
+tw-bisect sweep --pkgs python3 -- python3 -m mymodule.selftest
+                                          run a check on every archived snapshot; prints the timeline
 tw-bisect shell 20261020 --pkgs python3   poke around inside a snapshot
 ```
 
