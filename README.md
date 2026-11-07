@@ -33,9 +33,12 @@ changelog: https://download.opensuse.org/tumbleweed/iso/Changes.20261105.txt
 done in 6m58s
 ```
 
-(That run was on an Apple Silicon laptop, so every container ran under
-x86_64 emulation. The test here is deliberately trivial; the point is the
-mechanism, which is the same for a failing test suite.)
+![tw-bisect finding libnghttp2-14](docs/tw-bisect-demo.svg)
+
+(Both runs were on an Apple Silicon laptop, so every container ran under
+x86_64 emulation: 6m58s cold, 2m19s once the snapshot images were cached.
+The test here is deliberately trivial; the point is the mechanism, which is
+the same for a failing test suite.)
 
 Tumbleweed publishes a new snapshot most days, and each one changes dozens to
 hundreds of packages. When something breaks after `zypper dup`, you know the
